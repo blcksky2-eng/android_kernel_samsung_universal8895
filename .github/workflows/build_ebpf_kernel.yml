@@ -5,11 +5,11 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
 
     steps:
     - name: Checkout Kernel Source
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         repository: 'ivanmeler/android_kernel_samsung_universal8895'
         ref: 'lineage-18.1'
@@ -18,7 +18,7 @@ jobs:
       run: |
         sudo apt update
         sudo apt install -y build-essential libncurses5-dev bzip2 libssl-dev bc \
-          flex bison libelf-dev git lzop ccache zip openjdk-8-jdk python3
+          flex bison libelf-dev git lzop ccache zip openjdk-8-jdk python3 libncurses5
 
     - name: Download GCC Toolchains
       run: |
@@ -56,7 +56,7 @@ jobs:
         make -j$(nproc)
 
     - name: Upload Kernel Image Artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: s8_plus_ebpf_kernel
         path: arch/arm64/boot/Image
