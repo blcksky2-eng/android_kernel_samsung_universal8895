@@ -1,4 +1,4 @@
-name: Build Samsung S8+ eBPF Kernel
+name: Build Samsung S8+ eBPF Kernel (Clang)
 
 on:
   workflow_dispatch:
@@ -11,17 +11,23 @@ jobs:
     - name: Checkout Local Repository
       uses: actions/checkout@v4
 
-    - name: Install Build Dependencies & Cross Compilers
+    - name: Install Build Dependencies
       run: |
         sudo apt update
         sudo apt install -y build-essential libncurses5 bzip2 libssl-dev bc \
-          flex bison libelf-dev git lzop ccache zip python3 python2 curl \
-          gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
+          flex bison libelf-dev git lzop ccache zip python3 python2 curl
+
+    - name: Download Google Android Clang & GCC Toolchains
+      run: |
+        # Download Google's official Android Clang 11.0.2 (r383902b1)
+        git clone --depth=1 https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 -b android11-release clang
+        git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 toolchain-aarch64
+        git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9 toolchain-arm32
 
     - name: Inject eBPF & Kprobe Configs
       run: |
         TARGET_DEFCONFIG=$(find arch/arm64/configs/ -name "*dream2lte*" | head -n 1)
-        echo "Injecting into defconfig: $TARGET_DEFCONFIG"
+        echo "Configuring: $TARGET_DEFCONFIG"
         cat << 'EOF' >> $TARGET_DEFCONFIG
         CONFIG_BPF=y
         CONFIG_BPF_SYSCALL=y
@@ -41,23 +47,22 @@ jobs:
         CONFIG_IKCONFIG_PROC=y
         EOF
 
-    - name: Compile Kernel
+    - name: Compile Kernel & DTBs with Android Clang
       run: |
         export ARCH=arm64
         export SUBARCH=arm64
-        export CROSS_COMPILE=aarch64-linux-gnu-
-        export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
-        export HOSTCFLAGS="-fcommon"
-        export HOSTCXXFLAGS="-fcommon"
+        export CLANG_TRIPLE=aarch64-linux-gnu-
+        export CC=$(pwd)/clang/clang-r383902b1/bin/clang
+        export CROSS_COMPILE=$(pwd)/toolchain-aarch64/bin/aarch64-linux-android-
+        export CROSS_COMPILE_ARM32=$(pwd)/toolchain-arm32/bin/arm-linux-androideabi-
+        export PATH=$(pwd)/clang/clang-r383902b1/bin:$(pwd)/toolchain-aarch64/bin:$PATH
 
         DEFCONFIG_NAME=$(basename $(find arch/arm64/configs/ -name "*dream2lte*" | head -n 1))
-        echo "Building defconfig: $DEFCONFIG_NAME..."
+        make $DEFCONFIG_NAME
+        make -j$(nproc)
 
-        make HOSTCFLAGS="-fcommon" HOSTCXXFLAGS="-fcommon" $DEFCONFIG_NAME
-        make HOSTCFLAGS="-fcommon" HOSTCXXFLAGS="-fcommon" -j$(nproc)
-
-    - name: Upload Kernel Image Artifact
+    - name: Upload Kernel Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: s8_plus_ebpf_kernel
+        name: s8_plus_ebpf_kernel_clang
         path: arch/arm64/boot/Image
