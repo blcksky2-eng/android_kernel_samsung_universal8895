@@ -1,0 +1,62 @@
+name: Build Samsung S8+ eBPF Kernel
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-20.04
+
+    steps:
+    - name: Checkout Kernel Source
+      uses: actions/checkout@v3
+      with:
+        repository: 'ivanmeler/android_kernel_samsung_universal8895'
+        ref: 'lineage-18.1'
+
+    - name: Install Build Dependencies
+      run: |
+        sudo apt update
+        sudo apt install -y build-essential libncurses5-dev bzip2 libssl-dev bc \
+          flex bison libelf-dev git lzop ccache zip openjdk-8-jdk python3
+
+    - name: Download GCC Toolchains
+      run: |
+        git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 toolchain-aarch64
+        git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9 toolchain-arm32
+
+    - name: Inject eBPF & Kprobe Configs
+      run: |
+        cat << 'EOF' >> arch/arm64/configs/exynos8895-dream2lte_eur_open_defconfig
+        CONFIG_BPF=y
+        CONFIG_BPF_SYSCALL=y
+        CONFIG_BPF_JIT=y
+        CONFIG_HAVE_EBPF_JIT=y
+        CONFIG_KPROBES=y
+        CONFIG_KPROBE_EVENTS=y
+        CONFIG_UPROBES=y
+        CONFIG_UPROBE_EVENTS=y
+        CONFIG_PERF_EVENTS=y
+        CONFIG_BPF_EVENTS=y
+        CONFIG_NET_CLS_ACT=y
+        CONFIG_NET_SCH_INGRESS=y
+        CONFIG_NET_CLS_BPF=y
+        CONFIG_NET_ACT_BPF=y
+        CONFIG_IKCONFIG=y
+        CONFIG_IKCONFIG_PROC=y
+        EOF
+
+    - name: Compile Kernel
+      run: |
+        export ARCH=arm64
+        export SUBARCH=arm64
+        export CROSS_COMPILE=$(pwd)/toolchain-aarch64/bin/aarch64-linux-android-
+        export CROSS_COMPILE_ARM32=$(pwd)/toolchain-arm32/bin/arm-linux-androideabi-
+        make exynos8895-dream2lte_eur_open_defconfig
+        make -j$(nproc)
+
+    - name: Upload Kernel Image Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: s8_plus_ebpf_kernel
+        path: arch/arm64/boot/Image
