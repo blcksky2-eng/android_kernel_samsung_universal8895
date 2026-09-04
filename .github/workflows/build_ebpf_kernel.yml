@@ -8,17 +8,14 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-    - name: Checkout Kernel Source
+    - name: Checkout Local Repository
       uses: actions/checkout@v4
-      with:
-        repository: 'ivanmeler/android_kernel_samsung_universal8895'
-        ref: 'lineage-18.1'
 
     - name: Install Build Dependencies
       run: |
         sudo apt update
-        sudo apt install -y build-essential libncurses5-dev bzip2 libssl-dev bc \
-          flex bison libelf-dev git lzop ccache zip openjdk-8-jdk python3 libncurses5
+        sudo apt install -y build-essential libncurses5 bzip2 libssl-dev bc \
+          flex bison libelf-dev git lzop ccache zip python3 python2 curl
 
     - name: Download GCC Toolchains
       run: |
@@ -27,7 +24,9 @@ jobs:
 
     - name: Inject eBPF & Kprobe Configs
       run: |
-        cat << 'EOF' >> arch/arm64/configs/exynos8895-dream2lte_eur_open_defconfig
+        TARGET_DEFCONFIG=$(find arch/arm64/configs/ -name "*dream2lte*" | head -n 1)
+        echo "Injecting into defconfig: $TARGET_DEFCONFIG"
+        cat << 'EOF' >> $TARGET_DEFCONFIG
         CONFIG_BPF=y
         CONFIG_BPF_SYSCALL=y
         CONFIG_BPF_JIT=y
@@ -52,7 +51,9 @@ jobs:
         export SUBARCH=arm64
         export CROSS_COMPILE=$(pwd)/toolchain-aarch64/bin/aarch64-linux-android-
         export CROSS_COMPILE_ARM32=$(pwd)/toolchain-arm32/bin/arm-linux-androideabi-
-        make exynos8895-dream2lte_eur_open_defconfig
+        DEFCONFIG_NAME=$(basename $(find arch/arm64/configs/ -name "*dream2lte*" | head -n 1))
+        echo "Building defconfig: $DEFCONFIG_NAME..."
+        make $DEFCONFIG_NAME
         make -j$(nproc)
 
     - name: Upload Kernel Image Artifact
